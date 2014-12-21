@@ -17,6 +17,14 @@
 ///
 /// INCLUDES
 ///
+/// Standard
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
+/// Personal
+#include "globalconstants.h"
 
 ///
 /// GLOBAL VALUES
@@ -32,6 +40,15 @@
 int main(int argc, char const *argv[])
 {
 	//_INITIALISATION_
+
+	/// Clear the screen
+	system("clear");
+
+	// Little welcome message
+	VERBOSE("\t.::|[    GAME SERVER    ]|::.\n\t^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
+
+
+	
 
 	//_LISTENLOOP_
 
