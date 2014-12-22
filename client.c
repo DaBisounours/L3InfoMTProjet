@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
 /// Personal
 #include "globalconstants.h"
 
@@ -35,11 +36,19 @@
 /// of the connection named pipe
 int isVirtualClient = false;
 
+/// The name of the client
+char clientName[MAX_CLIENT_NAME_LENGTH];
+
+/// The communication pipe file descriptor
+int communicationPipe;
+
 //
 // FUNCTIONS
 //
 /// Procedure creating the communication pipe
 void createCommunicationPipe(char *pathname){
+	char chmodCommand[MAX_NAMED_TUBE_NAME_LENGTH+10];
+
 	if (mkfifo(pathname, 700)==-1)
 	{
 		if (unlink(pathname)==-1)
@@ -48,19 +57,54 @@ void createCommunicationPipe(char *pathname){
 			exit(ERR_NAMED_PIPE_CREATION_FAIL);
 		}
 		mkfifo(pathname, 700);
+
 	}
+	snprintf(chmodCommand, MAX_NAMED_TUBE_NAME_LENGTH+10,
+		"chmod 700 %s",pathname);
+	system(chmodCommand);
 }
 
 /// Procedure to open 'safely' a file
-int safeOpen(char *pathname)
+int safeOpen(char *pathname, int mode)
 {
 	int file;
-	if ((file=open(pathname, O_RDONLY))==-1)
+	if ((file=open(pathname, mode))==-1)
 	{
-		ERR("[CLIENT] "ERR_OPEN_FAIL_MSG);
+		ERR("[CLIENT] %s"ERR_OPEN_FAIL_MSG, clientName);
 		exit(ERR_OPEN_FAIL);
 	}
 	return file;
+}
+
+int getCommand() 
+{	
+	//TODO Implement this
+	return true;
+}
+
+void sendQuit(int pipe, int reason)
+{
+	VERBOSE("Leaving the game.");
+	clientMessage msg;
+	msg.type=QUIT;
+	msg.choice=reason;
+	if(write(pipe, &msg, sizeof (clientMessage))==-1)
+	{
+		ERR("Error while writing in the communication pipe");
+	}
+}
+
+// When receiving SIGINT
+void interrupt(int signal)
+{
+	// Sending quit request if connection to server is still on
+	sendQuit(communicationPipe, REASON_INTERRUPTED);
+
+	// ERRor message
+	ERR_NOPERROR("Lost connection to server.");
+
+	// Exit with error code
+	exit(INTERRUPTED);
 }
 
 //
@@ -68,10 +112,9 @@ int safeOpen(char *pathname)
 //
 int main(int argc, char const *argv[])
 {
-	char clientName[MAX_CLIENT_NAME_LENGTH];
 	int connectionPipe;
-	int communicationPipe;
 	clientInfo this;
+	serverMessage messageFromServer;
 
 	//_INITIALISATION_
 
@@ -121,13 +164,14 @@ int main(int argc, char const *argv[])
 	}
 
 	//_CONNECTION_
+
+	// Manage signals
+	signal(SIGINT, interrupt);
+
 	// Open named pipe
 	DEBUG("[CLIENT: %s] Opening connection named pipe.", clientName);
-	if ((connectionPipe=open(CONNECTION_NAMED_PIPE_NAME, O_WRONLY))==-1)
-	{
-		ERR("[CLIENT: %s] "ERR_OPEN_FAIL_MSG, clientName);
-		exit(ERR_OPEN_FAIL);
-	}
+	connectionPipe=safeOpen(CONNECTION_NAMED_PIPE_NAME, O_WRONLY);
+
 
 	// If Virtual Client then die... Goodbye son...
 	if(isVirtualClient) 
@@ -143,26 +187,41 @@ int main(int argc, char const *argv[])
 	DEBUG("[CLIENT %s] Preparing Data.", clientName);
 	this.pid=getpid();
 	snprintf(this.name, MAX_CLIENT_NAME_LENGTH, "%s", clientName);
-	snprintf(this.namedTubeName, MAX_NAMED_TUBE_NAME_LENGTH, ".%d.pipe",getpid());
+	snprintf(this.pipeName, MAX_NAMED_TUBE_NAME_LENGTH, ".%d.pipe",getpid());
 
 	// Create named tube to communicate with server
 	DEBUG("[CLIENT %s] Creating communication pipe.", clientName);
-	createCommunicationPipe(this.namedTubeName);
+	createCommunicationPipe(this.pipeName);
 
 	// Send over data to server
 	DEBUG("[CLIENT %s] Connection to the server.", clientName);
 	write(connectionPipe, &this, sizeof(clientInfo));
-
+	close(connectionPipe);
 	// Wait for server acknowledgment
 	DEBUG("[CLIENT %s] Waiting for acknowledgment.", clientName);
-	communicationPipe = open(this.namedTubeName, O_RDWR);
+	communicationPipe = safeOpen(this.pipeName, O_RDWR);
 
-	DEBUG("[CLIENT %s] Connected.", clientName);
+	// Cheking server confirmation
+	read(communicationPipe, &messageFromServer, sizeof(serverMessage));
+	if(messageFromServer.type==KICK) 
+	{
+		ERR_NOPERROR("Connection refused by server. Room full.");
+		interrupt(0);
+	}
+	if(messageFromServer.type==ACCEPT){
+		DEBUG("[CLIENT %s] Connected.", clientName);
+	}
+
 	//_GUESSLOOP_
-
-
+	//TODO Commands
+	while(getCommand());
+	usleep(100000);
 	//_END_
+	sendQuit(communicationPipe, REASON_USER_REQUEST);
 	close(communicationPipe);
 	DEBUG("[CLIENT %s] Disconnected.", clientName);
+
+	// Delete the pipe
+	unlink(this.pipeName);
 	return 0;
 }
