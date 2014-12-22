@@ -20,7 +20,7 @@
 #define KYEL  "\x1B[33m"
 
 //DISPLAYING MACROS
-#define ERR(...) fprintf (stderr,"\x1B[31m"__VA_ARGS__);printf("\x1B[0m\n")
+#define ERR(...) fprintf (stderr,"\x1B[31m"__VA_ARGS__);perror(" ");printf("\x1B[0m\n")
 #define VERBOSE(...) fprintf (stdout,"\x1B[32m"__VA_ARGS__);printf("\x1B[0m\n")
 #define DEBUG(...) fprintf (stdout,"\x1B[33m"__VA_ARGS__);printf("\x1B[0m\n")
 
@@ -33,9 +33,16 @@
 //COMMUNICATION RELATED CONSTANTS
 #define MAX_CLIENT_NAME_LENGTH 100
 #define MAX_NAMED_TUBE_NAME_LENGTH 50
+#define CONNECTION_NAMED_PIPE_NAME ".serverConnection.pipe"
 
 //RETURN CODES AND MESSAGES
 #define OK 0
+
+#define ERR_NAMED_PIPE_CREATION_FAIL 30
+#define ERR_NAMED_PIPE_CREATION_FAIL_MSG "Error while creating the named communication named pipe"
+
+#define ERR_OPEN_FAIL 20
+#define ERR_OPEN_FAIL_MSG "Error while opening the named communication named pipe"
 
 //TYPES
 typedef struct struct_clientInfo
