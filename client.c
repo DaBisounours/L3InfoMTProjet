@@ -42,6 +42,9 @@ char clientName[MAX_CLIENT_NAME_LENGTH];
 /// The communication pipe file descriptor
 int communicationPipe;
 
+/// Boolean to tell if this client has lost or not
+int lost = 0;
+
 //
 // FUNCTIONS
 //
@@ -76,11 +79,6 @@ int safeOpen(char *pathname, int mode)
 	return file;
 }
 
-int getCommand() 
-{	
-	//TODO Implement this
-	return true;
-}
 
 void sendQuit(int pipe, int reason)
 {
@@ -94,6 +92,7 @@ void sendQuit(int pipe, int reason)
 	}
 }
 
+
 // When receiving SIGINT
 void interrupt(int signal)
 {
@@ -101,10 +100,34 @@ void interrupt(int signal)
 	sendQuit(communicationPipe, REASON_INTERRUPTED);
 
 	// ERRor message
-	ERR_NOPERROR("Lost connection to server.");
+	if (signal != 0)
+	{
+		ERR_NOPERROR("Lost connection to server.");
+	}
+	
 
 	// Exit with error code
 	exit(INTERRUPTED);
+}
+
+
+// Acts like a filter for special commands. Returns if it is a value or not
+int getCommand(int *value) 
+{
+	char command[100];
+	read(0, command, 100);
+	if(!strncmp(command, "quit\n",5) || !strncmp(command,"q\n",2))
+		interrupt(0);
+	else
+	{
+		*value = atoi(command);
+		if (*value == 0 && strncmp(command, "0\n",5))
+		{
+			return false;
+		}
+	}
+	//TODO Implement this
+	return true;
 }
 
 //
@@ -113,6 +136,8 @@ void interrupt(int signal)
 int main(int argc, char const *argv[])
 {
 	int connectionPipe;
+	int clientChoice;
+
 	clientInfo this;
 	serverMessage messageFromServer;
 
@@ -214,8 +239,17 @@ int main(int argc, char const *argv[])
 
 	//_GUESSLOOP_
 	//TODO Commands
-	while(getCommand());
-	usleep(100000);
+	while(!lost){
+		if(getCommand(&clientChoice))
+		{
+			DEBUG("[CLIENT %s] Choice : %d.", clientName, clientChoice);
+			//write
+			usleep(100000);
+			//read
+		}
+	}
+
+	
 	//_END_
 	sendQuit(communicationPipe, REASON_USER_REQUEST);
 	close(communicationPipe);

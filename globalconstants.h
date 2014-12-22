@@ -17,7 +17,7 @@
 ///BOOLEANS
 #define true 1
 #define false 0
-#define DEBUG_MODE 0
+#define DEBUG_MODE 1
 
 ///DISPLAYING MACROS
 #define ERR(...) fprintf (stderr,"\x1B[31m"__VA_ARGS__);perror(" ");printf("\x1B[0m\n")

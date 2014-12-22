@@ -173,20 +173,7 @@ void *newConnection(void *arg){
 	pthread_exit(OK);
 }
 
-/// Gets a command from server terminal
-void getCommand(){
-	
-	int flags = fcntl(0, F_GETFL, 0);
-	fcntl(0, F_SETFL, flags | O_NONBLOCK);
-	
-	char command[200];
-	// If a command has been typed on the terminal
-	if(read(0,command,100)>0) 
-	{
-		if(!strncmp(command, "quit", 4) || !strncmp(command, "q", 4));
-			//TODO Auto-send Interrupt to send signals to the clients
-	}	
-}
+
 
 void shutDown(int signal)
 {
@@ -210,6 +197,21 @@ void kickPlayer(clientInfo client)
 	communicationPipe=safeOpen(client.pipeName, O_RDWR);
 	write(communicationPipe, &messageFromServer, sizeof(serverMessage));
 	close(communicationPipe);
+}
+
+/// Gets a command from server terminal
+void getCommand(){
+	
+	int flags = fcntl(0, F_GETFL, 0);
+	fcntl(0, F_SETFL, flags | O_NONBLOCK);
+	
+	char command[200];
+	// If a command has been typed on the terminal
+	if(read(0,command,100)>0) 
+	{
+		if(!strncmp(command, "quit\n", 5) || !strncmp(command, "q\n", 2))
+			shutDown(0);
+	}	
 }
 
 ///
