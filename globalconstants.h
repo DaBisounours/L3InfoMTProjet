@@ -14,10 +14,9 @@
 /******************************************************************************/
 /******************************************************************************/
 
-#define KNRM  "\x1B[0m"
-#define KRED  "\x1B[31m"
-#define KGRN  "\x1B[32m"
-#define KYEL  "\x1B[33m"
+//BOOLEANS
+#define true 1
+#define false 1
 
 //DISPLAYING MACROS
 #define ERR(...) fprintf (stderr,"\x1B[31m"__VA_ARGS__);perror(" ");printf("\x1B[0m\n")
@@ -34,6 +33,7 @@
 #define MAX_CLIENT_NAME_LENGTH 100
 #define MAX_NAMED_TUBE_NAME_LENGTH 50
 #define CONNECTION_NAMED_PIPE_NAME ".serverConnection.pipe"
+#define VIRTUAL_CLIENT_ARGUMENT "--!VC!"
 
 //RETURN CODES AND MESSAGES
 #define OK 0
@@ -43,6 +43,12 @@
 
 #define ERR_OPEN_FAIL 20
 #define ERR_OPEN_FAIL_MSG "Error while opening the named communication named pipe"
+
+#define ERR_FORK_FAIL 10
+#define ERR_FORK_FAIL_MSG "Error while creating child process"
+
+#define ERR_EXEC_FAIL 40
+#define ERR_EXEC_FAIL_MSG "Error while executing binary"
 
 //TYPES
 typedef struct struct_clientInfo

@@ -36,6 +36,46 @@
 /// FUNCTIONS
 ///
 
+/// Procedure forking a child process to behave like a client
+void createVirtualClient(){
+	switch(fork()){
+		case -1:
+			ERR("[SERVER] "ERR_FORK_FAIL_MSG);
+			exit(ERR_FORK_FAIL);
+		case 0:
+			execl("client", "client", VIRTUAL_CLIENT_ARGUMENT, NULL);
+			system("pwd");
+			ERR("[SERVER] "ERR_EXEC_FAIL_MSG);
+			exit(ERR_EXEC_FAIL);
+		default:
+			break;
+	}
+}
+
+/// Procedure creating the connection pipe
+void createConnectionPipe(){
+	if (mkfifo(CONNECTION_NAMED_PIPE_NAME, 700)==-1)
+	{
+		if (unlink(CONNECTION_NAMED_PIPE_NAME)==-1)
+		{
+			ERR("[SERVER] "ERR_NAMED_PIPE_CREATION_FAIL_MSG);
+			exit(ERR_NAMED_PIPE_CREATION_FAIL);
+		}
+		mkfifo(CONNECTION_NAMED_PIPE_NAME, 700);
+	}
+}
+
+int safeOpen(char *pathname)
+{
+	int file;
+	if ((file=open(pathname, O_RDONLY))==-1)
+	{
+		ERR("[SERVER] "ERR_OPEN_FAIL_MSG);
+		exit(ERR_OPEN_FAIL);
+	}
+	return file;
+}
+
 ///
 /// MAIN
 ///
@@ -50,31 +90,28 @@ int main(int argc, char const *argv[])
 	system("clear");
 
 	/// Little welcome message
-	VERBOSE("\t.::|[    GAME SERVER    ]|::.\n\t^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
+	VERBOSE("\t.::|[    GAME SERVER    ]|::.\n"
+			"\t^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
+	
+	VERBOSE("Initialisation.");
 
 	// Create named pipe
 	DEBUG("[SERVER] Creating connection named pipe.");
-	if (mkfifo(CONNECTION_NAMED_PIPE_NAME, 770)==-1)
-	{
-		if (unlink(CONNECTION_NAMED_PIPE_NAME)==-1)
-		{
-			ERR("[SERVER] "ERR_NAMED_PIPE_CREATION_FAIL_MSG);
-			exit(ERR_NAMED_PIPE_CREATION_FAIL);
-		}
-		mkfifo(CONNECTION_NAMED_PIPE_NAME, 770);
-	}
+	createConnectionPipe();
+	
 
+	//WARNING Find another option
+	//Forcing access to the pipe to the clients
+	system("chmod 700 "CONNECTION_NAMED_PIPE_NAME);
 
 	// Create a virtual client that will connect the pipe
-
+	DEBUG("[SERVER] Starting virtual client.");
+	createVirtualClient();
 
 	// Open named pipe
 	DEBUG("[SERVER] Opening connection named pipe.");
-	if ((connectionPipe=open(CONNECTION_NAMED_PIPE_NAME, O_RDONLY))==-1)
-	{
-		ERR("[SERVER] "ERR_OPEN_FAIL_MSG);
-		exit(ERR_OPEN_FAIL);
-	}
+	connectionPipe = safeOpen(CONNECTION_NAMED_PIPE_NAME);
+
 
 	//_LISTENLOOP_
 
@@ -83,6 +120,7 @@ int main(int argc, char const *argv[])
 	//_END_
 
 	DEBUG("[SERVER] Unlinking the connection named pipe");
+	close(connectionPipe);
 	if (unlink(CONNECTION_NAMED_PIPE_NAME)==-1) {
 		ERR("[SERVER] Did not manage to unlink connection named pipe");
 	}
