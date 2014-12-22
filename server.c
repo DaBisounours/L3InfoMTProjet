@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <pthread.h>
 /// Personal
 #include "globalconstants.h"
 
@@ -65,6 +66,15 @@ void createConnectionPipe(){
 	}
 }
 
+void *newConnection(void *arg){
+	clientInfo *client = (clientInfo *) arg;
+	DEBUG("[SERVER: THREAD %s] Thread created for %s (%d)", 
+		client->name,client->name,(int)client->pid);
+	VERBOSE("%s is connected.",client->name);
+	pthread_exit(OK);
+}
+
+/// Procedure to open 'safely' a file
 int safeOpen(char *pathname)
 {
 	int file;
@@ -82,7 +92,8 @@ int safeOpen(char *pathname)
 int main(int argc, char const *argv[])
 {
 	int connectionPipe;
-
+	clientInfo newClient;
+	pthread_t thread;
 
 	//_INITIALISATION_
 
@@ -114,8 +125,19 @@ int main(int argc, char const *argv[])
 
 
 	//_LISTENLOOP_
+	VERBOSE("Server is ready to accept new players.");
+	while(true){
+		usleep(100000);
+		if(read(connectionPipe, &newClient, sizeof(clientInfo))<=0)
+		{
 
-		//_NEW THREAD FOR CLIENT_
+		}
+		else
+		{
+			//_NEW THREAD FOR CLIENT_
+			pthread_create(&thread, NULL, newConnection, &newClient);
+		}	
+	}
 
 	//_END_
 

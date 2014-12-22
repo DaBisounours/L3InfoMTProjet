@@ -38,6 +38,30 @@ int isVirtualClient = false;
 //
 // FUNCTIONS
 //
+/// Procedure creating the communication pipe
+void createCommunicationPipe(char *pathname){
+	if (mkfifo(pathname, 700)==-1)
+	{
+		if (unlink(pathname)==-1)
+		{
+			ERR("[SERVER] "ERR_NAMED_PIPE_CREATION_FAIL_MSG);
+			exit(ERR_NAMED_PIPE_CREATION_FAIL);
+		}
+		mkfifo(pathname, 700);
+	}
+}
+
+/// Procedure to open 'safely' a file
+int safeOpen(char *pathname)
+{
+	int file;
+	if ((file=open(pathname, O_RDONLY))==-1)
+	{
+		ERR("[CLIENT] "ERR_OPEN_FAIL_MSG);
+		exit(ERR_OPEN_FAIL);
+	}
+	return file;
+}
 
 //
 // MAIN
@@ -46,6 +70,8 @@ int main(int argc, char const *argv[])
 {
 	char clientName[MAX_CLIENT_NAME_LENGTH];
 	int connectionPipe;
+	int communicationPipe;
+	clientInfo this;
 
 	//_INITIALISATION_
 
@@ -69,12 +95,14 @@ int main(int argc, char const *argv[])
 		// Name
 		else
 		{
+			isVirtualClient=false;
 			snprintf(clientName,MAX_CLIENT_NAME_LENGTH, "%s", argv[1]);
 		}
 	}
 	// No name, default name will be the pid
 	else
 	{
+		isVirtualClient=false;
 		snprintf(clientName,MAX_CLIENT_NAME_LENGTH, "%d", (int)getpid());
 	}
 
@@ -86,6 +114,10 @@ int main(int argc, char const *argv[])
 		VERBOSE("Hello %s! Welcome to the guessing game!\n"
 "If at any moment during the game, you need the rules, type 'rules' or 'r'.\n"
 "If you wish to leave the game, type 'q' or 'quit'.", clientName);
+	}
+	else
+	{
+		DEBUG("[CLIENT: %s] Virtual Client created.", clientName);
 	}
 
 	//_CONNECTION_
@@ -104,9 +136,33 @@ int main(int argc, char const *argv[])
 		close(connectionPipe);
 		exit(OK);
 	}
+	
+	DEBUG("[CLIENT %s] Client started.", clientName);
 
+	// Prepare data to send over to server
+	DEBUG("[CLIENT %s] Preparing Data.", clientName);
+	this.pid=getpid();
+	snprintf(this.name, MAX_CLIENT_NAME_LENGTH, "%s", clientName);
+	snprintf(this.namedTubeName, MAX_NAMED_TUBE_NAME_LENGTH, ".%d.pipe",getpid());
+
+	// Create named tube to communicate with server
+	DEBUG("[CLIENT %s] Creating communication pipe.", clientName);
+	createCommunicationPipe(this.namedTubeName);
+
+	// Send over data to server
+	DEBUG("[CLIENT %s] Connection to the server.", clientName);
+	write(connectionPipe, &this, sizeof(clientInfo));
+
+	// Wait for server acknowledgment
+	DEBUG("[CLIENT %s] Waiting for acknowledgment.", clientName);
+	communicationPipe = open(this.namedTubeName, O_RDWR);
+
+	DEBUG("[CLIENT %s] Connected.", clientName);
 	//_GUESSLOOP_
 
+
 	//_END_
+	close(communicationPipe);
+	DEBUG("[CLIENT %s] Disconnected.", clientName);
 	return 0;
 }

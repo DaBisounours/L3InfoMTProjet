@@ -16,12 +16,13 @@
 
 //BOOLEANS
 #define true 1
-#define false 1
+#define false 0
+#define DEBUG_MODE 0
 
 //DISPLAYING MACROS
 #define ERR(...) fprintf (stderr,"\x1B[31m"__VA_ARGS__);perror(" ");printf("\x1B[0m\n")
 #define VERBOSE(...) fprintf (stdout,"\x1B[32m"__VA_ARGS__);printf("\x1B[0m\n")
-#define DEBUG(...) fprintf (stdout,"\x1B[33m"__VA_ARGS__);printf("\x1B[0m\n")
+#define DEBUG(...) if(DEBUG_MODE){fprintf (stdout,"\x1B[33m"__VA_ARGS__);printf("\x1B[0m\n");}
 
 //GAME RELATED CONSTANTS
 #define DIFFICULTY 1
