@@ -87,6 +87,76 @@ int list_delPlayer(clientInfo client){
 	}
 }
 
+/// Searching for a player by pid
+int list_getPlayerByPid(pid_t pid, clientInfo *dest_client)
+{
+	int i=0;
+	/// Find the player
+	while(playersList[i].pid != pid && i < MAX_PLAYERS){i++;}	
+	/// Return a boolean telling if it is in
+	if(i==MAX_PLAYERS) return false;
+	else {
+		/// Update the output clientInfo
+		strncpy(dest_client->name, playersList[i].name,
+			MAX_CLIENT_NAME_LENGTH);
+		dest_client->pid=playersList[i].pid;
+		strncpy(dest_client->pipeName, playersList[i].pipeName,
+			MAX_NAMED_PIPE_NAME_LENGTH);
+		return true;
+	}
+}
+
+/// Searching for a player by name. If multiple players have the same name,
+/// Then another call will output the next one
+/// Until the function returns false when no other has been found
+/// An other call will then start from the beginning
+int list_getPlayerByName(char *name, clientInfo *dest_client)
+{
+	static int i=0;
+
+	/// Find the player
+	while(i < MAX_PLAYERS)
+	{
+		if (!strcmp(name, playersList[i].name) && playersListMask[i]==true) 
+			break; 
+		i++;
+	}	
+	/// Return a boolean telling if it is in
+	if(i==MAX_PLAYERS) 
+	{
+		i=0;
+		return false;
+	}
+	else 
+	{
+		/// Update the output clientInfo
+		strncpy(dest_client->name, playersList[i].name,
+			MAX_CLIENT_NAME_LENGTH);
+		dest_client->pid=playersList[i].pid;
+		strncpy(dest_client->pipeName, playersList[i].pipeName,
+			MAX_NAMED_PIPE_NAME_LENGTH);
+		return true;
+	}
+}
+
+/// Returns boolean telling if the string is numeric
+int isNumeric(char *s)
+{
+	int i=0;
+	if(s==NULL) return false;
+	else if(*s == '\0' || *s == '\n') return false;
+	while(s[i] <= '9' && s[i] >= '0')i++;
+	if (i==strlen(s)) return true;
+	else return false;
+}
+
+/// Displays client Information
+void verboseClientInfo(clientInfo client){
+	VERBOSE("Client Information : \n\tName: %s\n"
+						"\tPID: %d\n"
+						"\tPipe Name: %s\n", 
+						client.name, client.pid, client.pipeName);
+}
 
 /// Procedure forking a child process to behave like a client
 void createVirtualClient(){
@@ -174,8 +244,22 @@ void *newConnection(void *arg){
 	pthread_exit(OK);
 }
 
+/// Kicks a player from the server
+void kickPlayer(clientInfo client, int reason)
+{
+	int communicationPipe;
+	serverMessage messageFromServer;
+	messageFromServer.type=KICK;
+	messageFromServer.choice=reason;
+	communicationPipe=safeOpen(client.pipeName, O_WRONLY);
+	kill(client.pid, SIGINT);
+	usleep(1000);
+	write(communicationPipe, &messageFromServer, sizeof(serverMessage));
+	close(communicationPipe);
+	list_delPlayer(client);
+}
 
-
+/// Shuts down the server on SIGINT
 void shutDown(int signal)
 {
 	DEBUG("\n[SERVER] Shut down server.");
@@ -184,22 +268,10 @@ void shutDown(int signal)
 	{
 		if(playersListMask[i]==true){
 			// Force disconnecting all the clients
-			kill(playersList[i].pid, SIGINT);
-			list_delPlayer(playersList[i]);
+			kickPlayer(playersList[i], REASON_SERVER_INTERRUPTION);
 		}
 	}
 	exit(INTERRUPTED);
-}
-
-void kickPlayerByInfo(clientInfo client)
-{
-	int communicationPipe;
-	serverMessage messageFromServer;
-	messageFromServer.type=KICK;
-	messageFromServer.choice=REASON_ROOM_FULL;
-	communicationPipe=safeOpen(client.pipeName, O_RDWR);
-	write(communicationPipe, &messageFromServer, sizeof(serverMessage));
-	close(communicationPipe);
 }
 
 
@@ -207,8 +279,11 @@ void kickPlayerByInfo(clientInfo client)
 void getCommand(){
 	
 	int flags = fcntl(0, F_GETFL, 0);
-	fcntl(0, F_SETFL, flags | O_NONBLOCK);
 	int i;
+	clientInfo client;
+
+	fcntl(0, F_SETFL, flags | O_NONBLOCK);
+	
 	
 	char command[200];
 	char arg[200];
@@ -218,11 +293,55 @@ void getCommand(){
 		i=0;while(command[i] != '\n')i++;command[i+1]=0;
 
 		DEBUG("[SERVER] Command : '%s'",command);
-		if(!strncmp(command, "quit\n", 5) || !strncmp(command, "q\n", 2))
+		if(!strncmp(command, "quit\n", 5) 
+		|| !strncmp(command, "q\n", 2) 
+		|| !strncmp(command, "exit\n", 5))
 			shutDown(0);
 		else if(!strncmp(command, "kick ", 5) && command[5] != '\n')
 		{
+			/// Separating argument
 			strcpy(arg, &(command[5]));
+			arg[strlen(arg)-1]=0;
+			DEBUG("[SERVER] Kick: '%s'",arg);
+			if (isNumeric(arg)) 
+			{
+				if(list_getPlayerByPid(atoi(arg), &client)) 
+				{
+					VERBOSE("%s has been kicked.", client.name);
+					kickPlayer(client, REASON_SERVER_KICK);
+				}
+			}
+			else
+			{
+				
+				if(list_getPlayerByName(arg, &client))
+				{
+					VERBOSE("%s has been kicked.", client.name);
+					kickPlayer(client, REASON_SERVER_KICK);
+				}
+			}
+		}
+		else if(!strncmp(command, "info ", 5) && command[5] != '\n')
+		{
+			/// Separating argument
+			strcpy(arg, &(command[5]));
+			arg[strlen(arg)-1]=0;
+
+			DEBUG("[SERVER] Info: '%s'",arg);
+			if (isNumeric(arg)) 
+			{
+				if(list_getPlayerByPid(atoi(arg), &client)) 
+					verboseClientInfo(client);			
+			}
+			else
+			{
+				if(list_getPlayerByName(arg, &client))
+					verboseClientInfo(client);
+			}
+		}
+		else
+		{
+			VERBOSE("Unknown command.");
 		}
 	}	
 }
@@ -233,7 +352,7 @@ void endGame(){
 	for(i=0; i<MAX_PLAYERS; i++)
 	{
 		if(playersListMask[i]==true){
-			// Force disconnecting all the clients
+			// Tell all the clients that they have lost
 			kill(playersList[i].pid, SIGUSR1);
 			list_delPlayer(playersList[i]);
 		}
@@ -304,7 +423,7 @@ int main(int argc, char const *argv[])
 			else
 			{
 				ERR_NOPERROR("Could not accept new player %s: Room full.", newClient.name);
-				kickPlayerByInfo(newClient);
+				kickPlayer(newClient, REASON_ROOM_FULL);
 			}
 			//displayPlayerList();
 		}	

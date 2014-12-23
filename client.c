@@ -45,12 +45,18 @@ int communicationPipe;
 /// Boolean to tell if this client has lost or not
 int lost = 0;
 
+/// Messages boxes from and to server
+/// We keep them accessible to a signal handler to give a reason if the client
+/// Loses connection.
+serverMessage messageFromServer;
+clientMessage messageToServer;
+
 //
 // FUNCTIONS
 //
 /// Procedure creating the communication pipe
 void createCommunicationPipe(char *pathname){
-	char chmodCommand[MAX_NAMED_TUBE_NAME_LENGTH+10];
+	char chmodCommand[MAX_NAMED_PIPE_NAME_LENGTH+10];
 
 	if (mkfifo(pathname, 700)==-1)
 	{
@@ -62,7 +68,7 @@ void createCommunicationPipe(char *pathname){
 		mkfifo(pathname, 700);
 
 	}
-	snprintf(chmodCommand, MAX_NAMED_TUBE_NAME_LENGTH+10,
+	snprintf(chmodCommand, MAX_NAMED_PIPE_NAME_LENGTH+10,
 		"chmod 700 %s",pathname);
 	system(chmodCommand);
 }
@@ -96,15 +102,24 @@ void sendQuit(int pipe, int reason)
 // When receiving SIGINT
 void interrupt(int signal)
 {
+	int flags = fcntl(communicationPipe, F_GETFL, 0);
+	fcntl(communicationPipe, F_SETFL, flags | O_NONBLOCK);
 	// Sending quit request if connection to server is still on
 	sendQuit(communicationPipe, REASON_INTERRUPTED);
-
-	// ERRor message
-	if (signal != 0)
-	{
-		ERR_NOPERROR("Lost connection to server.");
-	}
 	
+	// If last message from server tells why
+	usleep(10000);
+	read(communicationPipe, &messageFromServer, sizeof(serverMessage));
+
+	if (messageFromServer.type==KICK)
+	{
+		if(messageFromServer.choice==REASON_SERVER_KICK){
+			ERR_NOPERROR("You have been kicked by the server.");		
+		}
+		else if(messageFromServer.choice==REASON_SERVER_INTERRUPTION){
+			ERR_NOPERROR("The server has shut down.");		
+		}
+	}
 
 	// Exit with error code
 	exit(INTERRUPTED);
@@ -116,7 +131,9 @@ int getCommand(int *value)
 {
 	char command[100];
 	read(0, command, 100);
-	if(!strncmp(command, "quit\n",5) || !strncmp(command,"q\n",2))
+	if(!strncmp(command, "quit\n",5) 
+	|| !strncmp(command,"q\n",2) 
+	|| !strncmp(command,"exit\n",5))
 		interrupt(0);
 	else
 	{
@@ -139,8 +156,7 @@ int main(int argc, char const *argv[])
 	int clientChoice;
 
 	clientInfo this;
-	serverMessage messageFromServer;
-	clientMessage messageToServer;
+
 
 	//_INITIALISATION_
 
@@ -213,7 +229,7 @@ int main(int argc, char const *argv[])
 	DEBUG("[CLIENT %s] Preparing Data.", clientName);
 	this.pid=getpid();
 	snprintf(this.name, MAX_CLIENT_NAME_LENGTH, "%s", clientName);
-	snprintf(this.pipeName, MAX_NAMED_TUBE_NAME_LENGTH, ".%d.pipe",getpid());
+	snprintf(this.pipeName, MAX_NAMED_PIPE_NAME_LENGTH, ".%d.pipe",getpid());
 
 	// Create named tube to communicate with server
 	DEBUG("[CLIENT %s] Creating communication pipe.", clientName);
@@ -249,7 +265,8 @@ int main(int argc, char const *argv[])
 			messageToServer.choice=clientChoice;
 			write(communicationPipe, &messageToServer, sizeof(clientMessage));
 			usleep(100000);
-			//read
+			read(communicationPipe, &messageFromServer, sizeof(serverMessage));
+			DEBUG("[CLIENT %s] Answer : %d.", clientName, clientChoice);
 		}
 	}
 

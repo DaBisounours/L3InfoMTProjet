@@ -34,7 +34,7 @@
 
 ///COMMUNICATION RELATED CONSTANTS
 #define MAX_CLIENT_NAME_LENGTH 100
-#define MAX_NAMED_TUBE_NAME_LENGTH 50
+#define MAX_NAMED_PIPE_NAME_LENGTH 50
 #define CONNECTION_NAMED_PIPE_NAME ".serverConnection.pipe"
 #define VIRTUAL_CLIENT_ARGUMENT "--!VC!"
 
@@ -48,6 +48,8 @@
 #define KICK 2
 #define COMMUNICATION 3
 #define REASON_ROOM_FULL 0
+#define REASON_SERVER_KICK 2
+#define REASON_SERVER_INTERRUPTION 3
 
 
 ///RETURN CODES AND MESSAGES
@@ -76,7 +78,7 @@ typedef struct struct_clientInfo
 	// Name of the client
 	char name[MAX_CLIENT_NAME_LENGTH];
 	// Name of the named tube
-	char pipeName[MAX_NAMED_TUBE_NAME_LENGTH];
+	char pipeName[MAX_NAMED_PIPE_NAME_LENGTH];
 
 } clientInfo;
 
