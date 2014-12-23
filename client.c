@@ -82,7 +82,7 @@ int safeOpen(char *pathname, int mode)
 
 void sendQuit(int pipe, int reason)
 {
-	VERBOSE("Leaving the game.");
+	VERBOSE("\nLeaving the game.");
 	clientMessage msg;
 	msg.type=QUIT;
 	msg.choice=reason;
@@ -140,6 +140,7 @@ int main(int argc, char const *argv[])
 
 	clientInfo this;
 	serverMessage messageFromServer;
+	clientMessage messageToServer;
 
 	//_INITIALISATION_
 
@@ -240,10 +241,13 @@ int main(int argc, char const *argv[])
 	//_GUESSLOOP_
 	//TODO Commands
 	while(!lost){
+		VERBOSE("\nType a number: ");
 		if(getCommand(&clientChoice))
 		{
 			DEBUG("[CLIENT %s] Choice : %d.", clientName, clientChoice);
-			//write
+			messageToServer.type=GUESS;
+			messageToServer.choice=clientChoice;
+			write(communicationPipe, &messageToServer, sizeof(clientMessage));
 			usleep(100000);
 			//read
 		}

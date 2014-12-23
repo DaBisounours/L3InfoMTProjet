@@ -33,7 +33,8 @@
 ///
 /// GLOBAL VALUES
 ///
-pid_t playersList[MAX_PLAYERS];
+clientInfo playersList[MAX_PLAYERS];
+int playersListMask[MAX_PLAYERS];
 
 ///
 /// FUNCTIONS
@@ -55,37 +56,37 @@ pid_t playersList[MAX_PLAYERS];
 void list_initPlayers(){
 	int i;
 	for(i=0;i<MAX_PLAYERS; i++) 
-		playersList[i]=NO_PLAYER;
+		playersListMask[i]=false;
 }
 
 /// Adding a player to the game
-int list_addPlayer(pid_t pid){
+int list_addPlayer(clientInfo client){
 	int i=0;
 	/// Find an empty space
-	while(playersList[i]!=NO_PLAYER && i<MAX_PLAYERS)i++;
+	while(playersListMask[i]!=false && i<MAX_PLAYERS){i++;}
 	/// Add a player if we found a place
 	if(i==MAX_PLAYERS) return false;
 	else
 	{
-		playersList[i]=pid;
+		playersListMask[i]=true;
+		playersList[i]=client;
 		return true;
 	}
 }
 
 /// Deleting a player from the game
-int list_delPlayer(pid_t pid){
+int list_delPlayer(clientInfo client){
 	int i=0;
 	/// Find the player
-	while(playersList[i]!=pid && i<MAX_PLAYERS){
-		i++;
-	}
-	/// Del the player if we found it
+	while(playersList[i].pid != client.pid && i < MAX_PLAYERS){i++;}
+	/// Delete the player if we found it
 	if(i==MAX_PLAYERS) return false;
 	else {
-		playersList[i]=NO_PLAYER;
+		playersListMask[i]=false;
 		return true;
 	}
 }
+
 
 /// Procedure forking a child process to behave like a client
 void createVirtualClient(){
@@ -168,7 +169,7 @@ void *newConnection(void *arg){
 		}
 		
 	}
-	list_delPlayer(client.pid);
+	list_delPlayer(client);
 	//displayPlayerList();
 	pthread_exit(OK);
 }
@@ -177,18 +178,20 @@ void *newConnection(void *arg){
 
 void shutDown(int signal)
 {
+	DEBUG("\n[SERVER] Shut down server.");
 	int i;
 	for(i=0; i<MAX_PLAYERS; i++)
 	{
-		if(playersList[i]!=NO_PLAYER){
+		if(playersListMask[i]==true){
 			// Force disconnecting all the clients
-			kill(playersList[i], SIGINT);
+			kill(playersList[i].pid, SIGINT);
+			list_delPlayer(playersList[i]);
 		}
 	}
 	exit(INTERRUPTED);
 }
 
-void kickPlayer(clientInfo client)
+void kickPlayerByInfo(clientInfo client)
 {
 	int communicationPipe;
 	serverMessage messageFromServer;
@@ -199,19 +202,42 @@ void kickPlayer(clientInfo client)
 	close(communicationPipe);
 }
 
+
 /// Gets a command from server terminal
 void getCommand(){
 	
 	int flags = fcntl(0, F_GETFL, 0);
 	fcntl(0, F_SETFL, flags | O_NONBLOCK);
+	int i;
 	
 	char command[200];
+	char arg[200];
 	// If a command has been typed on the terminal
 	if(read(0,command,100)>0) 
 	{
+		i=0;while(command[i] != '\n')i++;command[i+1]=0;
+
+		DEBUG("[SERVER] Command : '%s'",command);
 		if(!strncmp(command, "quit\n", 5) || !strncmp(command, "q\n", 2))
 			shutDown(0);
+		else if(!strncmp(command, "kick ", 5) && command[5] != '\n')
+		{
+			strcpy(arg, &(command[5]));
+		}
 	}	
+}
+
+void endGame(){
+	DEBUG("\n[SERVER] Ending game.");
+	int i;
+	for(i=0; i<MAX_PLAYERS; i++)
+	{
+		if(playersListMask[i]==true){
+			// Force disconnecting all the clients
+			kill(playersList[i].pid, SIGUSR1);
+			list_delPlayer(playersList[i]);
+		}
+	}
 }
 
 ///
@@ -222,7 +248,6 @@ int main(int argc, char const *argv[])
 	int connectionPipe;
 	clientInfo newClient;
 	pthread_t thread;
-	char command[200];
 
 	//_INITIALISATION_
 
@@ -273,13 +298,13 @@ int main(int argc, char const *argv[])
 		if(!(read(connectionPipe, &newClient, sizeof(clientInfo))<=0))
 		{
 			// Update the list of clients
-			if(list_addPlayer(newClient.pid))
+			if(list_addPlayer(newClient))
 				//_NEW THREAD FOR CLIENT_
 				pthread_create(&thread, NULL, newConnection, &newClient);
 			else
 			{
 				ERR_NOPERROR("Could not accept new player %s: Room full.", newClient.name);
-				kickPlayer(newClient);
+				kickPlayerByInfo(newClient);
 			}
 			//displayPlayerList();
 		}	
