@@ -54,6 +54,13 @@ clientMessage messageToServer;
 //
 // FUNCTIONS
 //
+
+/// Print the rules
+void verboseRules(){
+	system("cat ./rules.txt");
+}
+
+
 /// Procedure creating the communication pipe
 void createCommunicationPipe(char *pathname){
 	char chmodCommand[MAX_NAMED_PIPE_NAME_LENGTH+10];
@@ -135,6 +142,12 @@ int getCommand(int *value)
 	|| !strncmp(command,"q\n",2) 
 	|| !strncmp(command,"exit\n",5))
 		interrupt(0);
+	else if(!strncmp(command, "rules\n",6) 
+		 || !strncmp(command,"r\n",2) ){
+		verboseRules();
+		return false;
+	}
+		
 	else
 	{
 		*value = atoi(command);
@@ -266,7 +279,15 @@ int main(int argc, char const *argv[])
 			write(communicationPipe, &messageToServer, sizeof(clientMessage));
 			usleep(100000);
 			read(communicationPipe, &messageFromServer, sizeof(serverMessage));
-			DEBUG("[CLIENT %s] Answer : %d.", clientName, clientChoice);
+			if(messageFromServer.choice==HIGHER){
+				DEBUG("[CLIENT %s] Answer : %d (HIGHER).", clientName, messageFromServer.choice);
+				VERBOSE("Incorrect. Try again with a higher value.");
+			}
+			else if(messageFromServer.choice==LOWER){
+				DEBUG("[CLIENT %s] Answer : %d (LOWER).", clientName, messageFromServer.choice);
+				VERBOSE("Incorrect. Try again with a lower value.");
+			}
+
 		}
 	}
 

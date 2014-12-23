@@ -201,6 +201,15 @@ int safeOpen(char *pathname, int mode)
 	return file;
 }
 
+
+/// Function to test number
+int testNumber(int number)
+{
+	//TODO Implement this
+	return HIGHER;
+}
+
+
 /// Thread main
 void *newConnection(void *arg){
 	int communicationPipe;
@@ -208,6 +217,8 @@ void *newConnection(void *arg){
 	serverMessage messageFromServer;
 	clientInfo *p_client = (clientInfo *) arg;
 	clientInfo client;
+	int highOrLow;
+
 	client.pid=p_client->pid;
 	strcpy(client.name,p_client->name);
 	strcpy(client.pipeName,p_client->pipeName);
@@ -237,7 +248,27 @@ void *newConnection(void *arg){
 			VERBOSE("%s has left the game.", client.name);
 			break;
 		}
-		
+		else if(messageFromClient.type==GUESS)
+		{
+			messageFromServer.type=GAME;
+
+			if((highOrLow=testNumber(messageFromClient.choice))==0){
+				//WON
+				messageFromServer.choice=WIN;
+				//TODO End the game
+				//TELL EVERYONE WHO WON ???
+			}
+			else if(highOrLow > 0)
+				messageFromServer.choice=HIGHER;
+			else
+				messageFromServer.choice=LOWER;
+
+			/// Sending message
+			write(communicationPipe, &messageFromServer, 
+					sizeof(serverMessage));
+		}
+
+
 	}
 	list_delPlayer(client);
 	//displayPlayerList();
