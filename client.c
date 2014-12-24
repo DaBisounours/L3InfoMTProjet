@@ -36,8 +36,8 @@
 /// of the connection named pipe
 int isVirtualClient = false;
 
-/// The name of the client
-char clientName[MAX_CLIENT_NAME_LENGTH];
+/// The information structure of the client
+clientInfo this;
 
 /// The communication pipe file descriptor
 int communicationPipe;
@@ -86,7 +86,7 @@ int safeOpen(char *pathname, int mode)
 	int file;
 	if ((file=open(pathname, mode))==-1)
 	{
-		ERR("[CLIENT] %s"ERR_OPEN_FAIL_MSG, clientName);
+		ERR("[CLIENT] %s"ERR_OPEN_FAIL_MSG, this.name);
 		exit(ERR_OPEN_FAIL);
 	}
 	return file;
@@ -117,7 +117,9 @@ void interrupt(int signal)
 	// If last message from server tells why
 	usleep(10000);
 	read(communicationPipe, &messageFromServer, sizeof(serverMessage));
-
+	close(communicationPipe);
+	// Unlink the pipe
+	unlink(this.pipeName);
 	if (messageFromServer.type==KICK)
 	{
 		if(messageFromServer.choice==REASON_SERVER_KICK){
@@ -127,6 +129,10 @@ void interrupt(int signal)
 			ERR_NOPERROR("The server has shut down.");		
 		}
 	}
+	else
+	{
+		exit(OK);
+	}
 
 	// Exit with error code
 	exit(INTERRUPTED);
@@ -134,9 +140,9 @@ void interrupt(int signal)
 
 void lose(int signal)
 {
-	VERBOSE("Time is out! Sorry but you have lost!\n"
-		"Stay connected if you want to play the next game");
+	VERBOSE("Time is out! Sorry but you have lost!\n");
 	gameIsOn=false;
+
 }
 
 void start(int signal)
@@ -182,9 +188,6 @@ int main(int argc, char const *argv[])
 	int connectionPipe;
 	int clientChoice;
 
-	clientInfo this;
-
-
 	//_INITIALISATION_
 
 	/// Manage a name or a help section in the first argument
@@ -202,20 +205,21 @@ int main(int argc, char const *argv[])
 		else if(!strcmp(argv[1],VIRTUAL_CLIENT_ARGUMENT))
 		{
 			isVirtualClient=true;
-			snprintf(clientName,MAX_CLIENT_NAME_LENGTH, "Virtual Client");
+			snprintf(this.name,MAX_CLIENT_NAME_LENGTH, "Virtual Client");
 		}
 		// Name
 		else
 		{
 			isVirtualClient=false;
-			snprintf(clientName,MAX_CLIENT_NAME_LENGTH, "%s", argv[1]);
+			snprintf(this.name,MAX_CLIENT_NAME_LENGTH, "%s", argv[1]);
+
 		}
 	}
 	// No name, default name will be the pid
 	else
 	{
 		isVirtualClient=false;
-		snprintf(clientName,MAX_CLIENT_NAME_LENGTH, "%d", (int)getpid());
+		snprintf(this.name,MAX_CLIENT_NAME_LENGTH, "%d", (int)getpid());
 	}
 
 	// Little welcome message
@@ -225,11 +229,11 @@ int main(int argc, char const *argv[])
 		system("clear");
 		VERBOSE("Hello %s! Welcome to the guessing game!\n"
 "If at any moment during the game, you need the rules, type 'rules' or 'r'.\n"
-"If you wish to leave the game, type 'q' or 'quit'.", clientName);
+"If you wish to leave the game, type 'q' or 'quit'.", this.name);
 	}
 	else
 	{
-		DEBUG("[CLIENT: %s] Virtual Client created.", clientName);
+		DEBUG("[CLIENT: %s] Virtual Client created.", this.name);
 	}
 
 	//_CONNECTION_
@@ -240,36 +244,35 @@ int main(int argc, char const *argv[])
 	signal(SIG_START, start);
 
 	// Open named pipe
-	DEBUG("[CLIENT: %s] Opening connection named pipe.", clientName);
+	DEBUG("[CLIENT: %s] Opening connection named pipe.", this.name);
 	connectionPipe=safeOpen(CONNECTION_NAMED_PIPE_NAME, O_WRONLY);
 
 
 	// If Virtual Client then die... Goodbye son...
 	if(isVirtualClient) 
 	{
-		DEBUG("[CLIENT: %s] Closing connection named pipe.", clientName);
+		DEBUG("[CLIENT: %s] Closing connection named pipe.", this.name);
 		close(connectionPipe);
 		exit(OK);
 	}
 	
-	DEBUG("[CLIENT %s] Client started.", clientName);
+	DEBUG("[CLIENT %s] Client started.", this.name);
 
 	// Prepare data to send over to server
-	DEBUG("[CLIENT %s] Preparing Data.", clientName);
+	DEBUG("[CLIENT %s] Preparing Data.", this.name);
 	this.pid=getpid();
-	snprintf(this.name, MAX_CLIENT_NAME_LENGTH, "%s", clientName);
 	snprintf(this.pipeName, MAX_NAMED_PIPE_NAME_LENGTH, ".%d.pipe",getpid());
 
 	// Create named tube to communicate with server
-	DEBUG("[CLIENT %s] Creating communication pipe.", clientName);
+	DEBUG("[CLIENT %s] Creating communication pipe.", this.name);
 	createCommunicationPipe(this.pipeName);
 
 	// Send over data to server
-	DEBUG("[CLIENT %s] Connection to the server.", clientName);
+	DEBUG("[CLIENT %s] Connection to the server.", this.name);
 	write(connectionPipe, &this, sizeof(clientInfo));
 	close(connectionPipe);
 	// Wait for server acknowledgment
-	DEBUG("[CLIENT %s] Waiting for acknowledgment.", clientName);
+	DEBUG("[CLIENT %s] Waiting for acknowledgment.", this.name);
 	communicationPipe = safeOpen(this.pipeName, O_RDWR);
 
 	// Cheking server confirmation
@@ -280,7 +283,7 @@ int main(int argc, char const *argv[])
 		interrupt(0);
 	}
 	if(messageFromServer.type==ACCEPT){
-		DEBUG("[CLIENT %s] Connected.", clientName);
+		DEBUG("[CLIENT %s] Connected.", this.name);
 	}
 
 	//_GUESSLOOP_
@@ -288,7 +291,7 @@ int main(int argc, char const *argv[])
 	while(true){
 		if(getCommand(&clientChoice))
 		{
-			DEBUG("[CLIENT %s] Choice : %d.", clientName, clientChoice);
+			DEBUG("[CLIENT %s] Choice : %d.", this.name, clientChoice);
 			messageToServer.type=GUESS;
 			messageToServer.choice=clientChoice;
 			write(communicationPipe, &messageToServer, sizeof(clientMessage));
@@ -297,11 +300,11 @@ int main(int argc, char const *argv[])
 			if(messageFromServer.type==GAME)
 			{
 				if(messageFromServer.choice==HIGHER){
-					DEBUG("[CLIENT %s] Answer : %d (HIGHER).", clientName, messageFromServer.choice);
+					DEBUG("[CLIENT %s] Answer : %d (HIGHER).", this.name, messageFromServer.choice);
 					VERBOSE("Incorrect. Try again with a higher value.");
 				}
 				else if(messageFromServer.choice==LOWER){
-					DEBUG("[CLIENT %s] Answer : %d (LOWER).", clientName, messageFromServer.choice);
+					DEBUG("[CLIENT %s] Answer : %d (LOWER).", this.name, messageFromServer.choice);
 					VERBOSE("Incorrect. Try again with a lower value.");
 				}
 			}
@@ -315,7 +318,7 @@ int main(int argc, char const *argv[])
 	//_END_
 	sendQuit(communicationPipe, REASON_USER_REQUEST);
 	close(communicationPipe);
-	DEBUG("[CLIENT %s] Disconnected.", clientName);
+	DEBUG("[CLIENT %s] Disconnected.", this.name);
 
 	// Delete the pipe
 	unlink(this.pipeName);
