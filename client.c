@@ -140,9 +140,8 @@ void interrupt(int signal)
 
 void lose(int signal)
 {
-	VERBOSE("Time is out! Sorry but you have lost!\n");
-	gameIsOn=false;
-
+	VERBOSE("Game over! Sorry but you have lost!\n");
+	interrupt(0);
 }
 
 void start(int signal)
@@ -284,6 +283,8 @@ int main(int argc, char const *argv[])
 	}
 	if(messageFromServer.type==ACCEPT){
 		DEBUG("[CLIENT %s] Connected.", this.name);
+		if(messageFromServer.choice==GAME)
+			gameIsOn=true;
 	}
 
 	//_GUESSLOOP_
@@ -291,12 +292,14 @@ int main(int argc, char const *argv[])
 	while(true){
 		if(getCommand(&clientChoice))
 		{
-			DEBUG("[CLIENT %s] Choice : %d.", this.name, clientChoice);
-			messageToServer.type=GUESS;
-			messageToServer.choice=clientChoice;
-			write(communicationPipe, &messageToServer, sizeof(clientMessage));
-			usleep(100000);
-			read(communicationPipe, &messageFromServer, sizeof(serverMessage));
+			if(gameIsOn){
+				DEBUG("[CLIENT %s] Choice : %d.", this.name, clientChoice);
+				messageToServer.type=GUESS;
+				messageToServer.choice=clientChoice;
+				write(communicationPipe, &messageToServer, sizeof(clientMessage));
+				usleep(100000);
+				read(communicationPipe, &messageFromServer, sizeof(serverMessage));
+			}	
 			if(messageFromServer.type==GAME)
 			{
 				if(messageFromServer.choice==HIGHER){

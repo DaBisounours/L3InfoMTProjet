@@ -41,6 +41,8 @@ bool gameIsOn = false;
 pthread_mutex_t number_mutex;
 int theNumber;
 
+int difficulty=DIFFICULTY;
+
 
 ///
 /// FUNCTIONS
@@ -198,7 +200,7 @@ int safeOpen(char *pathname, int mode)
 
 /// Randomisation function with a range
 int randRange(int left, int right){
-	return (rand()%(right-left))-left;
+	return (rand()%(right-left))+left;
 }
 
 /// Randomisation function with a range from 0
@@ -216,6 +218,7 @@ void initGame(){
 	//TODO Increase with difficulty
 	theNumber = randRange(-10*DIFFICULTY, (DIFFICULTY==0 ? 10 : 10*DIFFICULTY));
 	gameIsOn=true;
+	DEBUG("[SERVER] The number: %d", theNumber);
 
 	/// Unlock the number
 	pthread_mutex_unlock(&number_mutex);
@@ -227,6 +230,9 @@ void initGame(){
 			kill(playersList[i].pid, SIG_START);
 		}
 	}
+
+	/// Start timer
+	alarm(BASE_TIMEOUT/ (difficulty<1? 1 : difficulty) + 10);
 }
 
 
@@ -259,7 +265,8 @@ void *newConnection(void *arg){
 
 	// Sending connection confirmation
 	messageFromServer.type=ACCEPT;
-	messageFromServer.choice=-1;
+	if(gameIsOn) messageFromServer.choice=GAME;
+	else messageFromServer.choice=GAME_NOT_ON;
 	write(communicationPipe, &messageFromServer, sizeof(serverMessage));
 
 	while(true)
