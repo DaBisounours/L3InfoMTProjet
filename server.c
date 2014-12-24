@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
+#include <time.h>
 /// Personal
 #include "globalconstants.h"
 
@@ -35,22 +36,16 @@
 ///
 clientInfo playersList[MAX_PLAYERS];
 int playersListMask[MAX_PLAYERS];
+bool gameIsOn = false;
+
+pthread_mutex_t number_mutex;
+int theNumber;
+
 
 ///
 /// FUNCTIONS
 ///
 
-/// Display the list
-/*void displayPlayerList()
-{
-	int i;
-	DEBUG("--- CLIENT LIST ---");
-	for(i=0; i<MAX_PLAYERS;i++)
-	{
-		DEBUG("%d: %d", i, playersList[i]);
-	}
-	DEBUG("-------------------");
-}*/
 
 /// Init players list
 void list_initPlayers(){
@@ -60,7 +55,7 @@ void list_initPlayers(){
 }
 
 /// Adding a player to the game
-int list_addPlayer(clientInfo client){
+bool list_addPlayer(clientInfo client){
 	int i=0;
 	/// Find an empty space
 	while(playersListMask[i]!=false && i<MAX_PLAYERS){i++;}
@@ -75,7 +70,7 @@ int list_addPlayer(clientInfo client){
 }
 
 /// Deleting a player from the game
-int list_delPlayer(clientInfo client){
+bool list_delPlayer(clientInfo client){
 	int i=0;
 	/// Find the player
 	while(playersList[i].pid != client.pid && i < MAX_PLAYERS){i++;}
@@ -88,7 +83,7 @@ int list_delPlayer(clientInfo client){
 }
 
 /// Searching for a player by pid
-int list_getPlayerByPid(pid_t pid, clientInfo *dest_client)
+bool list_getPlayerByPid(pid_t pid, clientInfo *dest_client)
 {
 	int i=0;
 	/// Find the player
@@ -110,7 +105,7 @@ int list_getPlayerByPid(pid_t pid, clientInfo *dest_client)
 /// Then another call will output the next one
 /// Until the function returns false when no other has been found
 /// An other call will then start from the beginning
-int list_getPlayerByName(char *name, clientInfo *dest_client)
+bool list_getPlayerByName(char *name, clientInfo *dest_client)
 {
 	static int i=0;
 
@@ -140,7 +135,7 @@ int list_getPlayerByName(char *name, clientInfo *dest_client)
 }
 
 /// Returns boolean telling if the string is numeric
-int isNumeric(char *s)
+bool isNumeric(char *s)
 {
 	int i=0;
 	if(s==NULL) return false;
@@ -201,6 +196,39 @@ int safeOpen(char *pathname, int mode)
 	return file;
 }
 
+/// Randomisation function with a range
+int randRange(int left, int right){
+	return (rand()%(right-left))-left;
+}
+
+/// Randomisation function with a range from 0
+int randZeroTo(int right){
+	return rand()%right;
+}
+
+/// Game initialisation
+void initGame(){
+	int i;
+
+	/// Lock the number
+	pthread_mutex_lock(&number_mutex);
+
+	//TODO Increase with difficulty
+	theNumber = randRange(-10*DIFFICULTY, (DIFFICULTY==0 ? 10 : 10*DIFFICULTY));
+	gameIsOn=true;
+
+	/// Unlock the number
+	pthread_mutex_unlock(&number_mutex);
+
+	for(i=0; i<MAX_PLAYERS; i++)
+	{
+		if(playersListMask[i]==true)
+		{
+			kill(playersList[i].pid, SIG_START);
+		}
+	}
+}
+
 
 /// Function to test number
 int testNumber(int number)
@@ -248,10 +276,10 @@ void *newConnection(void *arg){
 			VERBOSE("%s has left the game.", client.name);
 			break;
 		}
-		else if(messageFromClient.type==GUESS)
+		else if(messageFromClient.type==GUESS && gameIsOn)
 		{
 			messageFromServer.type=GAME;
-
+			VERBOSE("%s has submitted %d", client.name, messageFromClient.choice);
 			if((highOrLow=testNumber(messageFromClient.choice))==0){
 				//WON
 				messageFromServer.choice=WIN;
@@ -267,11 +295,15 @@ void *newConnection(void *arg){
 			write(communicationPipe, &messageFromServer, 
 					sizeof(serverMessage));
 		}
+		else if (!gameIsOn)
+		{
+			messageFromServer.type=GAME;
+		}
 
 
 	}
 	list_delPlayer(client);
-	//displayPlayerList();
+	
 	pthread_exit(OK);
 }
 
@@ -280,6 +312,7 @@ void kickPlayer(clientInfo client, int reason)
 {
 	int communicationPipe;
 	serverMessage messageFromServer;
+
 	messageFromServer.type=KICK;
 	messageFromServer.choice=reason;
 	communicationPipe=safeOpen(client.pipeName, O_WRONLY);
@@ -328,6 +361,7 @@ void getCommand(){
 		|| !strncmp(command, "q\n", 2) 
 		|| !strncmp(command, "exit\n", 5))
 			shutDown(0);
+		/// KICK COMMAND
 		else if(!strncmp(command, "kick ", 5) && command[5] != '\n')
 		{
 			/// Separating argument
@@ -352,6 +386,7 @@ void getCommand(){
 				}
 			}
 		}
+		/// INFO COMMAND
 		else if(!strncmp(command, "info ", 5) && command[5] != '\n')
 		{
 			/// Separating argument
@@ -370,6 +405,12 @@ void getCommand(){
 					verboseClientInfo(client);
 			}
 		}
+		/// START COMMAND
+		else if(!strncmp(command, "start\n", 6) && command[6] != '\n')
+		{
+			initGame();
+		}
+		/// UNKNOWN COMMAND
 		else
 		{
 			VERBOSE("Unknown command.");
@@ -377,15 +418,14 @@ void getCommand(){
 	}	
 }
 
-void endGame(){
-	DEBUG("\n[SERVER] Ending game.");
+void endGame(int signal){
+	VERBOSE("\nTime is out!");
 	int i;
 	for(i=0; i<MAX_PLAYERS; i++)
 	{
 		if(playersListMask[i]==true){
 			// Tell all the clients that they have lost
-			kill(playersList[i].pid, SIGUSR1);
-			list_delPlayer(playersList[i]);
+			kill(playersList[i].pid, SIG_STOP);
 		}
 	}
 }
@@ -403,6 +443,12 @@ int main(int argc, char const *argv[])
 
 	/// Managing sigint
 	signal(SIGINT, shutDown);
+	/// Managing sigalarm
+	signal(SIGALRM, endGame);
+
+
+	/// Randomisation srand initialisation
+	srand(time(NULL));
 
 	/// Clear the screen
 	system("clear");
@@ -436,9 +482,6 @@ int main(int argc, char const *argv[])
 
 	list_initPlayers();
 
-	//TODO DELETE
-	//displayPlayerList();
-
 	while(true){
 		usleep(10000);
 	
@@ -456,7 +499,6 @@ int main(int argc, char const *argv[])
 				ERR_NOPERROR("Could not accept new player %s: Room full.", newClient.name);
 				kickPlayer(newClient, REASON_ROOM_FULL);
 			}
-			//displayPlayerList();
 		}	
 	}
 

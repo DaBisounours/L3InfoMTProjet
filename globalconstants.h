@@ -17,6 +17,9 @@
 ///BOOLEANS
 #define true 1
 #define false 0
+#define bool int
+
+///DEBUGGING
 #define DEBUG_MODE 1
 
 ///DISPLAYING MACROS
@@ -30,7 +33,8 @@
 #define BASE_GAME_RANGE 20
 #define GAME_TIMEOUT 20
 #define MAX_PLAYERS 3
-
+#define SIG_START SIGUSR2
+#define SIG_STOP SIGUSR1
 
 ///COMMUNICATION RELATED CONSTANTS
 #define MAX_CLIENT_NAME_LENGTH 100
@@ -47,6 +51,7 @@
 #define ACCEPT 1
 #define KICK 2
 #define GAME 3
+#define GAME_NOT_ON 4
 #define WIN 31
 #define HIGHER 32
 #define LOWER 33

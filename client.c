@@ -42,8 +42,8 @@ char clientName[MAX_CLIENT_NAME_LENGTH];
 /// The communication pipe file descriptor
 int communicationPipe;
 
-/// Boolean to tell if this client has lost or not
-int lost = 0;
+/// Boolean to tell if a game has started on or not
+bool gameIsOn=false;
 
 /// Messages boxes from and to server
 /// We keep them accessible to a signal handler to give a reason if the client
@@ -132,9 +132,23 @@ void interrupt(int signal)
 	exit(INTERRUPTED);
 }
 
+void lose(int signal)
+{
+	VERBOSE("Time is out! Sorry but you have lost!\n"
+		"Stay connected if you want to play the next game");
+	gameIsOn=false;
+}
+
+void start(int signal)
+{
+	gameIsOn=true;
+	VERBOSE("Game started!");
+	VERBOSE("\nType a number: ");
+}
+
 
 // Acts like a filter for special commands. Returns if it is a value or not
-int getCommand(int *value) 
+bool getCommand(int *value) 
 {
 	char command[100];
 	read(0, command, 100);
@@ -222,6 +236,8 @@ int main(int argc, char const *argv[])
 
 	// Manage signals
 	signal(SIGINT, interrupt);
+	signal(SIG_STOP, lose);
+	signal(SIG_START, start);
 
 	// Open named pipe
 	DEBUG("[CLIENT: %s] Opening connection named pipe.", clientName);
@@ -269,8 +285,7 @@ int main(int argc, char const *argv[])
 
 	//_GUESSLOOP_
 	//TODO Commands
-	while(!lost){
-		VERBOSE("\nType a number: ");
+	while(true){
 		if(getCommand(&clientChoice))
 		{
 			DEBUG("[CLIENT %s] Choice : %d.", clientName, clientChoice);
@@ -279,15 +294,20 @@ int main(int argc, char const *argv[])
 			write(communicationPipe, &messageToServer, sizeof(clientMessage));
 			usleep(100000);
 			read(communicationPipe, &messageFromServer, sizeof(serverMessage));
-			if(messageFromServer.choice==HIGHER){
-				DEBUG("[CLIENT %s] Answer : %d (HIGHER).", clientName, messageFromServer.choice);
-				VERBOSE("Incorrect. Try again with a higher value.");
+			if(messageFromServer.type==GAME)
+			{
+				if(messageFromServer.choice==HIGHER){
+					DEBUG("[CLIENT %s] Answer : %d (HIGHER).", clientName, messageFromServer.choice);
+					VERBOSE("Incorrect. Try again with a higher value.");
+				}
+				else if(messageFromServer.choice==LOWER){
+					DEBUG("[CLIENT %s] Answer : %d (LOWER).", clientName, messageFromServer.choice);
+					VERBOSE("Incorrect. Try again with a lower value.");
+				}
 			}
-			else if(messageFromServer.choice==LOWER){
-				DEBUG("[CLIENT %s] Answer : %d (LOWER).", clientName, messageFromServer.choice);
-				VERBOSE("Incorrect. Try again with a lower value.");
-			}
-
+			else if(messageFromServer.type==GAME_NOT_ON || gameIsOn==false)
+				VERBOSE("Game is not started. Please wait...");
+				gameIsOn=false;
 		}
 	}
 
