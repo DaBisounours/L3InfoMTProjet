@@ -200,7 +200,9 @@ int safeOpen(char *pathname, int mode)
 
 /// Randomisation function with a range
 int randRange(int left, int right){
-	return (rand()%(right-left))+left;
+	int random=rand();
+	ERR_NOPERROR("PLOP rnd: %d, out: %d",random, (random%(right-left))+left);
+	return (random%(right-left))+left;
 }
 
 /// Randomisation function with a range from 0
@@ -250,6 +252,7 @@ int testNumber(int number)
 		/// Shift
 		while((shift=randRange(-1,1))==0);
 		theNumber+=shift;
+		DEBUG("[SERVER] The number: %d, the shift: %d", theNumber, shift);
 
 	pthread_mutex_unlock(&number_mutex);
 
@@ -275,7 +278,7 @@ void kickPlayer(clientInfo client, int reason)
 /// Shuts down the server on SIGINT
 void shutDown(int signal)
 {
-	DEBUG("\n[SERVER] Shut down server.");
+	VERBOSE("Shutting down server.");
 	int i;
 	for(i=0; i<MAX_PLAYERS; i++)
 	{
@@ -408,7 +411,7 @@ void *newConnection(void *arg){
 
 	while(true)
 	{
-		usleep(100000);
+		usleep(200000);
 		read(communicationPipe, &messageFromClient, sizeof(clientMessage));
 		DEBUG("[SERVER: THREAD %s] Received from %s:\n\t\t"
 			  			"type=%d\n\t\tchoice=%d",  

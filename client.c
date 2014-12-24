@@ -95,7 +95,7 @@ int safeOpen(char *pathname, int mode)
 
 void sendQuit(int pipe, int reason)
 {
-	VERBOSE("\nLeaving the game.");
+	DEBUG("\n[CLIENT: %s] Leaving the game.", this.name);
 	clientMessage msg;
 	msg.type=QUIT;
 	msg.choice=reason;
@@ -115,7 +115,7 @@ void interrupt(int signal)
 	sendQuit(communicationPipe, REASON_INTERRUPTED);
 	
 	// If last message from server tells why
-	usleep(10000);
+	usleep(100000);
 	read(communicationPipe, &messageFromServer, sizeof(serverMessage));
 	close(communicationPipe);
 	// Unlink the pipe
@@ -262,23 +262,23 @@ int main(int argc, char const *argv[])
 		exit(OK);
 	}
 	
-	DEBUG("[CLIENT %s] Client started.", this.name);
+	DEBUG("[CLIENT: %s] Client started.", this.name);
 
 	// Prepare data to send over to server
-	DEBUG("[CLIENT %s] Preparing Data.", this.name);
+	DEBUG("[CLIENT: %s] Preparing Data.", this.name);
 	this.pid=getpid();
 	snprintf(this.pipeName, MAX_NAMED_PIPE_NAME_LENGTH, ".%d.pipe",getpid());
 
 	// Create named tube to communicate with server
-	DEBUG("[CLIENT %s] Creating communication pipe.", this.name);
+	DEBUG("[CLIENT: %s] Creating communication pipe.", this.name);
 	createCommunicationPipe(this.pipeName);
 
 	// Send over data to server
-	DEBUG("[CLIENT %s] Connection to the server.", this.name);
+	DEBUG("[CLIENT: %s] Connection to the server.", this.name);
 	write(connectionPipe, &this, sizeof(clientInfo));
 	close(connectionPipe);
 	// Wait for server acknowledgment
-	DEBUG("[CLIENT %s] Waiting for acknowledgment.", this.name);
+	DEBUG("[CLIENT: %s] Waiting for acknowledgment.", this.name);
 	communicationPipe = safeOpen(this.pipeName, O_RDWR);
 
 	// Cheking server confirmation
@@ -289,7 +289,7 @@ int main(int argc, char const *argv[])
 		interrupt(0);
 	}
 	if(messageFromServer.type==ACCEPT){
-		DEBUG("[CLIENT %s] Connected.", this.name);
+		DEBUG("[CLIENT: %s] Connected.", this.name);
 		if(messageFromServer.choice==GAME)
 			gameIsOn=true;
 	}
@@ -299,8 +299,9 @@ int main(int argc, char const *argv[])
 	while(true){
 		if(getCommand(&clientChoice))
 		{
+			ERR_NOPERROR("PLOP gio:%d", gameIsOn);
 			if(gameIsOn){
-				DEBUG("[CLIENT %s] Choice : %d.", this.name, clientChoice);
+				DEBUG("[CLIENT: %s] Choice : %d.", this.name, clientChoice);
 				messageToServer.type=GUESS;
 				messageToServer.choice=clientChoice;
 				write(communicationPipe, &messageToServer, sizeof(clientMessage));
@@ -310,20 +311,22 @@ int main(int argc, char const *argv[])
 			if(messageFromServer.type==GAME)
 			{
 				if(messageFromServer.choice==HIGHER){
-					DEBUG("[CLIENT %s] Answer : %d (HIGHER).", this.name, messageFromServer.choice);
+					DEBUG("[CLIENT: %s] Answer : %d (HIGHER).", this.name, messageFromServer.choice);
 					VERBOSE("Incorrect. Try again with a higher value.");
 				}
 				else if(messageFromServer.choice==LOWER){
-					DEBUG("[CLIENT %s] Answer : %d (LOWER).", this.name, messageFromServer.choice);
+					DEBUG("[CLIENT: %s] Answer : %d (LOWER).", this.name, messageFromServer.choice);
 					VERBOSE("Incorrect. Try again with a lower value.");
 				}
 				else {
+					DEBUG("[CLIENT: %s] Answer : %d (WIN?).", this.name, messageFromServer.choice);
 					interrupt(0);
 				}
 			}
-			else if(messageFromServer.type==GAME_NOT_ON || gameIsOn==false)
+			else if(messageFromServer.type==GAME_NOT_ON || gameIsOn==false){
 				VERBOSE("Game is not started. Please wait...");
 				gameIsOn=false;
+			}
 		}
 	}
 
@@ -331,7 +334,7 @@ int main(int argc, char const *argv[])
 	//_END_
 	sendQuit(communicationPipe, REASON_USER_REQUEST);
 	close(communicationPipe);
-	DEBUG("[CLIENT %s] Disconnected.", this.name);
+	DEBUG("[CLIENT: %s] Disconnected.", this.name);
 
 	// Delete the pipe
 	unlink(this.pipeName);
