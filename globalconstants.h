@@ -53,8 +53,9 @@
 #define GAME 3
 #define GAME_NOT_ON 4
 #define WIN 31
-#define HIGHER 32
-#define LOWER 33
+#define LOSE 32
+#define HIGHER 33
+#define LOWER 34
 #define REASON_ROOM_FULL 21
 #define REASON_SERVER_KICK 22
 #define REASON_SERVER_INTERRUPTION 23

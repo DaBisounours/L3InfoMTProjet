@@ -239,79 +239,21 @@ void initGame(){
 /// Function to test number
 int testNumber(int number)
 {
-	//TODO Implement this
-	return HIGHER;
-}
+	int dir, shift;
+	pthread_mutex_lock(&number_mutex);
 
+		/// Check
+		if (theNumber == number) dir=WIN;
+		else if(theNumber > number) dir = HIGHER;
+		else dir=LOWER;
 
-/// Thread main
-void *newConnection(void *arg){
-	int communicationPipe;
-	clientMessage messageFromClient;
-	serverMessage messageFromServer;
-	clientInfo *p_client = (clientInfo *) arg;
-	clientInfo client;
-	int highOrLow;
+		/// Shift
+		while((shift=randRange(-1,1))==0);
+		theNumber+=shift;
 
-	client.pid=p_client->pid;
-	strcpy(client.name,p_client->name);
-	strcpy(client.pipeName,p_client->pipeName);
+	pthread_mutex_unlock(&number_mutex);
 
-	DEBUG("[SERVER: THREAD %s] Thread created for %s (%d)", 
-		client.name,client.name,(int)client.pid);
-	
-	VERBOSE("%s is connected.",client.name);
-	communicationPipe=safeOpen(client.pipeName, O_RDWR);
-
-	// Sending connection confirmation
-	messageFromServer.type=ACCEPT;
-	if(gameIsOn) messageFromServer.choice=GAME;
-	else messageFromServer.choice=GAME_NOT_ON;
-	write(communicationPipe, &messageFromServer, sizeof(serverMessage));
-
-	while(true)
-	{
-		usleep(100000);
-		read(communicationPipe, &messageFromClient, sizeof(clientMessage));
-		DEBUG("[SERVER: THREAD %s] Received from %s:\n\t\t"
-			  			"type=%d\n\t\tchoice=%d",  
-		client.name,client.name,
-		messageFromClient.type,messageFromClient.choice);
-		
-		if(messageFromClient.type==QUIT)
-		{
-			VERBOSE("%s has left the game.", client.name);
-			break;
-		}
-		else if(messageFromClient.type==GUESS && gameIsOn)
-		{
-			messageFromServer.type=GAME;
-			VERBOSE("%s has submitted %d", client.name, messageFromClient.choice);
-			if((highOrLow=testNumber(messageFromClient.choice))==0){
-				//WON
-				messageFromServer.choice=WIN;
-				//TODO End the game
-				//TELL EVERYONE WHO WON ???
-			}
-			else if(highOrLow > 0)
-				messageFromServer.choice=HIGHER;
-			else
-				messageFromServer.choice=LOWER;
-
-			/// Sending message
-			write(communicationPipe, &messageFromServer, 
-					sizeof(serverMessage));
-		}
-		else if (!gameIsOn)
-		{
-			messageFromServer.type=GAME;
-		}
-
-
-	}
-	list_delPlayer(client);
-	
-	pthread_exit(OK);
+	return dir;
 }
 
 /// Kicks a player from the server
@@ -425,16 +367,88 @@ void getCommand(){
 	}	
 }
 
-void endGame(int signal){
+void endGame(int sig){
 	VERBOSE("\nTime is out!");
 	int i;
 	for(i=0; i<MAX_PLAYERS; i++)
 	{
-		if(playersListMask[i]==true){
+		if(playersListMask[i]==true && playersList[i].pid!=sig){
 			// Tell all the clients that they have lost
 			kill(playersList[i].pid, SIG_STOP);
 		}
 	}
+}
+
+
+
+/// Thread main
+void *newConnection(void *arg){
+	int communicationPipe;
+	clientMessage messageFromClient;
+	serverMessage messageFromServer;
+	clientInfo *p_client = (clientInfo *) arg;
+	clientInfo client;
+	int highOrLow;
+
+	client.pid=p_client->pid;
+	strcpy(client.name,p_client->name);
+	strcpy(client.pipeName,p_client->pipeName);
+
+	DEBUG("[SERVER: THREAD %s] Thread created for %s (%d)", 
+		client.name,client.name,(int)client.pid);
+	
+	VERBOSE("%s is connected.",client.name);
+	communicationPipe=safeOpen(client.pipeName, O_RDWR);
+
+	// Sending connection confirmation telling if game is on or not
+	messageFromServer.type=ACCEPT;
+	if(gameIsOn) messageFromServer.choice=GAME;
+	else messageFromServer.choice=GAME_NOT_ON;
+	write(communicationPipe, &messageFromServer, sizeof(serverMessage));
+
+	while(true)
+	{
+		usleep(100000);
+		read(communicationPipe, &messageFromClient, sizeof(clientMessage));
+		DEBUG("[SERVER: THREAD %s] Received from %s:\n\t\t"
+			  			"type=%d\n\t\tchoice=%d",  
+		client.name,client.name,
+		messageFromClient.type,messageFromClient.choice);
+		
+		if(messageFromClient.type==QUIT)
+		{
+			VERBOSE("%s has left the game.", client.name);
+			break;
+		}
+		else if(messageFromClient.type==GUESS && gameIsOn)
+		{
+			messageFromServer.type=GAME;
+			VERBOSE("%s has submitted %d", client.name, messageFromClient.choice);
+			if((highOrLow=testNumber(messageFromClient.choice))==WIN){
+				//WON
+				messageFromServer.choice=WIN;
+				endGame(client.pid);
+				//TODO TELL EVERYONE WHO WON ???
+			}
+			else if(highOrLow == HIGHER)
+				messageFromServer.choice=HIGHER;
+			else
+				messageFromServer.choice=LOWER;
+
+			/// Sending message
+			write(communicationPipe, &messageFromServer, 
+					sizeof(serverMessage));
+		}
+		else if (!gameIsOn)
+		{
+			messageFromServer.type=GAME;
+		}
+
+
+	}
+	list_delPlayer(client);
+	
+	pthread_exit(OK);
 }
 
 ///

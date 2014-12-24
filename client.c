@@ -128,14 +128,21 @@ void interrupt(int signal)
 		else if(messageFromServer.choice==REASON_SERVER_INTERRUPTION){
 			ERR_NOPERROR("The server has shut down.");		
 		}
+		// Exit with error code
+		exit(INTERRUPTED);
+	}
+	else if (messageFromServer.type==GAME)
+	{
+		if(messageFromServer.choice == WIN){
+			VERBOSE("IT'S A WIN!");
+		}
+		exit(OK);
 	}
 	else
 	{
 		exit(OK);
 	}
 
-	// Exit with error code
-	exit(INTERRUPTED);
 }
 
 void lose(int signal)
@@ -309,6 +316,9 @@ int main(int argc, char const *argv[])
 				else if(messageFromServer.choice==LOWER){
 					DEBUG("[CLIENT %s] Answer : %d (LOWER).", this.name, messageFromServer.choice);
 					VERBOSE("Incorrect. Try again with a lower value.");
+				}
+				else {
+					interrupt(0);
 				}
 			}
 			else if(messageFromServer.type==GAME_NOT_ON || gameIsOn==false)
