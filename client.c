@@ -115,7 +115,7 @@ void interrupt(int signal)
 	sendQuit(communicationPipe, REASON_INTERRUPTED);
 	
 	// If last message from server tells why
-	usleep(100000);
+	usleep(500000);
 	read(communicationPipe, &messageFromServer, sizeof(serverMessage));
 	close(communicationPipe);
 	// Unlink the pipe
@@ -177,10 +177,11 @@ bool getCommand(int *value)
 	else
 	{
 		*value = atoi(command);
-		if (*value == 0 && strncmp(command, "0\n",5))
+		if (*value == 0 && strncmp(command, "0\n",2))
 		{
 			return false;
 		}
+		else return true;
 	}
 	//TODO Implement this
 	return true;
@@ -281,8 +282,9 @@ int main(int argc, char const *argv[])
 	DEBUG("[CLIENT: %s] Waiting for acknowledgment.", this.name);
 	communicationPipe = safeOpen(this.pipeName, O_RDWR);
 
-	// Cheking server confirmation
+	// Cheking server confirmation	
 	read(communicationPipe, &messageFromServer, sizeof(serverMessage));
+
 	if(messageFromServer.type==KICK) 
 	{
 		ERR_NOPERROR("Connection refused by server. Room full.");
@@ -299,7 +301,6 @@ int main(int argc, char const *argv[])
 	while(true){
 		if(getCommand(&clientChoice))
 		{
-			ERR_NOPERROR("PLOP gio:%d", gameIsOn);
 			if(gameIsOn){
 				DEBUG("[CLIENT: %s] Choice : %d.", this.name, clientChoice);
 				messageToServer.type=GUESS;

@@ -34,20 +34,32 @@
 ///
 /// GLOBAL VALUES
 ///
+
+/// List of players
 clientInfo playersList[MAX_PLAYERS];
+
+/// Mask of availability for the players slots, 0 for Free and 1 if there is a
+/// Client
 int playersListMask[MAX_PLAYERS];
+
+/// File descriptor for Connection Pipe
+int connectionPipe;
+
+/// Tells if game is started or not
 bool gameIsOn = false;
 
+/// Mutex
 pthread_mutex_t number_mutex;
+/// The magic number
 int theNumber;
 
+/// Level of difficulty
 int difficulty=DIFFICULTY;
 
 
 ///
 /// FUNCTIONS
 ///
-
 
 /// Init players list
 void list_initPlayers(){
@@ -201,7 +213,8 @@ int safeOpen(char *pathname, int mode)
 /// Randomisation function with a range
 int randRange(int left, int right){
 	int random=rand();
-	ERR_NOPERROR("PLOP rnd: %d, out: %d",random, (random%(right-left))+left);
+	right += 1;
+	ERR_NOPERROR("RANDOM:%d",random%(right-left));
 	return (random%(right-left))+left;
 }
 
@@ -264,15 +277,34 @@ void kickPlayer(clientInfo client, int reason)
 {
 	int communicationPipe;
 	serverMessage messageFromServer;
+	int flags;
+
 
 	messageFromServer.type=KICK;
 	messageFromServer.choice=reason;
+
 	communicationPipe=safeOpen(client.pipeName, O_WRONLY);
+
+  	flags = fcntl(communicationPipe, F_GETFL, 0);
+  	flags &= ~O_NONBLOCK;
+    fcntl(communicationPipe, F_SETFL, flags);
+
+
 	kill(client.pid, SIGINT);
 	usleep(1000);
 	write(communicationPipe, &messageFromServer, sizeof(serverMessage));
+	usleep(10000);			
 	close(communicationPipe);
 	list_delPlayer(client);
+}
+
+/// Deletes the connextion Pipe
+void unlinkConnectionPipe() {
+	DEBUG("[SERVER] Unlinking the connection named pipe");
+	close(connectionPipe);
+	if (unlink(CONNECTION_NAMED_PIPE_NAME)==-1) {
+		ERR("[SERVER] Did not manage to unlink connection named pipe");
+	}
 }
 
 /// Shuts down the server on SIGINT
@@ -287,6 +319,9 @@ void shutDown(int signal)
 			kickPlayer(playersList[i], REASON_SERVER_INTERRUPTION);
 		}
 	}
+	/// Resert alarm
+	alarm(0);
+	unlinkConnectionPipe();
 	exit(INTERRUPTED);
 }
 
@@ -370,6 +405,7 @@ void getCommand(){
 	}	
 }
 
+
 void endGame(int sig){
 	VERBOSE("\nTime is out!");
 	int i;
@@ -380,6 +416,9 @@ void endGame(int sig){
 			kill(playersList[i].pid, SIG_STOP);
 		}
 	}
+	/// Resert alarm
+	alarm(0);
+
 }
 
 
@@ -446,11 +485,9 @@ void *newConnection(void *arg){
 		{
 			messageFromServer.type=GAME;
 		}
-
-
 	}
 	list_delPlayer(client);
-	
+	alarm(0);
 	pthread_exit(OK);
 }
 
@@ -459,7 +496,6 @@ void *newConnection(void *arg){
 ///
 int main(int argc, char const *argv[])
 {
-	int connectionPipe;
 	clientInfo newClient;
 	pthread_t thread;
 
@@ -512,12 +548,13 @@ int main(int argc, char const *argv[])
 		getCommand();
 
 		// If a client has sent connection information
-		if(!(read(connectionPipe, &newClient, sizeof(clientInfo))<=0))
+		if((read(connectionPipe, &newClient, sizeof(clientInfo))>0))
 		{
 			// Update the list of clients
-			if(list_addPlayer(newClient))
+			if(list_addPlayer(newClient)){
 				//_NEW THREAD FOR CLIENT_
 				pthread_create(&thread, NULL, newConnection, &newClient);
+			}
 			else
 			{
 				ERR_NOPERROR("Could not accept new player %s: Room full.", newClient.name);
@@ -527,13 +564,6 @@ int main(int argc, char const *argv[])
 	}
 
 	//_END_
-
-	DEBUG("[SERVER] Unlinking the connection named pipe");
-	close(connectionPipe);
-	if (unlink(CONNECTION_NAMED_PIPE_NAME)==-1) {
-		ERR("[SERVER] Did not manage to unlink connection named pipe");
-	}
-	
 
 	return 0;
 }
