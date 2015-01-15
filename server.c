@@ -57,24 +57,26 @@ int theNumber;
 int difficulty=DIFFICULTY;
 
 
-///
-/// FUNCTIONS
-///
+//
+// FUNCTIONS
+//
 
-/// Init players list
+// Init players list
 void list_initPlayers(){
 	int i;
+	// Set all player slots available
 	for(i=0;i<MAX_PLAYERS; i++) 
 		playersListMask[i]=false;
 }
 
-/// Adding a player to the game
+// Add a player to the game
 bool list_addPlayer(clientInfo client){
 	int i=0;
-	/// Find an empty space
+	// Find an empty slot
 	while(playersListMask[i]!=false && i<MAX_PLAYERS){i++;}
-	/// Add a player if we found a place
+	// If we can't find one, return
 	if(i==MAX_PLAYERS) return false;
+	// Else add a player on the free slot
 	else
 	{
 		playersListMask[i]=true;
@@ -83,19 +85,22 @@ bool list_addPlayer(clientInfo client){
 	}
 }
 
-/// Deleting a player from the game
+// Delete a player from the game
 bool list_delPlayer(clientInfo client){
 	int i=0;
-	/// Find the player
+	// Find the player
 	while(playersList[i].pid != client.pid && i < MAX_PLAYERS){i++;}
-	/// Delete the player if we found it
+	// If player not found return
 	if(i==MAX_PLAYERS) return false;
+	// Delete the player if we found it
 	else {
 		playersListMask[i]=false;
 		return true;
 	}
 }
 
+// Searching a player
+// ...
 /// Searching for a player by pid
 bool list_getPlayerByPid(pid_t pid, clientInfo *dest_client)
 {
@@ -115,6 +120,7 @@ bool list_getPlayerByPid(pid_t pid, clientInfo *dest_client)
 	}
 }
 
+//...
 /// Searching for a player by name. If multiple players have the same name,
 /// Then another call will output the next one
 /// Until the function returns false when no other has been found
@@ -148,14 +154,20 @@ bool list_getPlayerByName(char *name, clientInfo *dest_client)
 	}
 }
 
-/// Returns boolean telling if the string is numeric
+// Return a boolean telling if the string is numeric
 bool isNumeric(char *s)
 {
 	int i=0;
+	// If string is null return false
 	if(s==NULL) return false;
+	// Else if string is empty or return line then return false
 	else if(*s == '\0' || *s == '\n') return false;
+	// Browse the string
 	while(s[i] <= '9' && s[i] >= '0')i++;
+	// If string contains only numeric char
+	// Return true
 	if (i==strlen(s)) return true;
+	// Else return false
 	else return false;
 }
 
@@ -167,7 +179,7 @@ void verboseClientInfo(clientInfo client){
 						client.name, client.pid, client.pipeName);
 }
 
-/// Procedure forking a child process to behave like a client
+// Procedure forking a child process to behave like a client
 void createVirtualClient(){
 	switch(fork()){
 		case -1:
@@ -183,61 +195,74 @@ void createVirtualClient(){
 	}
 }
 
-/// Procedure creating the connection pipe
+// Procedure creating the connection pipe
 void createConnectionPipe(){
+	// If unable to create the fifo file
 	if (mkfifo(CONNECTION_NAMED_PIPE_NAME, 700)==-1)
 	{
+		// Try unlink it
+		// If unable to unlink
 		if (unlink(CONNECTION_NAMED_PIPE_NAME)==-1)
 		{
+			// Exit with error message
 			ERR("[SERVER] "ERR_NAMED_PIPE_CREATION_FAIL_MSG);
 			exit(ERR_NAMED_PIPE_CREATION_FAIL);
 		}
-		mkfifo(CONNECTION_NAMED_PIPE_NAME, 700);
+		// If unlinked but unable to create it again
+		if(mkfifo(CONNECTION_NAMED_PIPE_NAME, 700)==-1){
+			// Exit with error message
+			ERR("[SERVER] "ERR_NAMED_PIPE_CREATION_FAIL_MSG);
+			exit(ERR_NAMED_PIPE_CREATION_FAIL);
+		}
 	}
 }
 
 
 
-/// Procedure to open 'safely' a file
+// Procedure to open 'safely' a file
 int safeOpen(char *pathname, int mode)
 {
 	int file;
+	// Open the file
+	// If unable to open file
 	if ((file=open(pathname, mode))==-1)
 	{
+		// Exit with error message
 		ERR("[SERVER] "ERR_OPEN_FAIL_MSG);
 		exit(ERR_OPEN_FAIL);
 	}
+	// Else return file descriptor
 	return file;
 }
 
-/// Randomisation function with a range
+// Randomisation function within a range [left,right] (left and right included)
 int randRange(int left, int right){
+	// Get a random number within [0, RAND_MAX]
 	int random=rand();
+	/// Include right bound
 	right += 1;
-	ERR_NOPERROR("RANDOM:%d",random%(right-left));
+	// Return ranged random number
 	return (random%(right-left))+left;
 }
 
-/// Randomisation function with a range from 0
-int randZeroTo(int right){
-	return rand()%right;
-}
-
-/// Game initialisation
+// Initialise a game 
 void initGame(){
 	int i;
 
 	/// Lock the number
 	pthread_mutex_lock(&number_mutex);
 
-	//TODO Increase with difficulty
+	// Set the number within a predefined range multiplied by difficulty
 	theNumber = randRange(-10*DIFFICULTY, (DIFFICULTY==0 ? 10 : 10*DIFFICULTY));
+
+	// Start the game
 	gameIsOn=true;
 	DEBUG("[SERVER] The number: %d", theNumber);
 
 	/// Unlock the number
 	pthread_mutex_unlock(&number_mutex);
 
+	// Tell all the players that the game started
 	for(i=0; i<MAX_PLAYERS; i++)
 	{
 		if(playersListMask[i]==true)
@@ -246,7 +271,7 @@ void initGame(){
 		}
 	}
 
-	/// Start timer
+	// Start timer
 	alarm(BASE_TIMEOUT/ (difficulty<1? 1 : difficulty) + 10);
 }
 
@@ -310,7 +335,7 @@ void unlinkConnectionPipe() {
 /// Shuts down the server on SIGINT
 void shutDown(int signal)
 {
-	VERBOSE("Shutting down server.");
+	VERBOSE("\nShutting down server.");
 	int i;
 	for(i=0; i<MAX_PLAYERS; i++)
 	{
@@ -323,6 +348,24 @@ void shutDown(int signal)
 	alarm(0);
 	unlinkConnectionPipe();
 	exit(INTERRUPTED);
+}
+
+
+
+void endGame(int sig){
+	VERBOSE("\nTime is out!");
+	int i;
+	for(i=0; i<MAX_PLAYERS; i++)
+	{
+		if(playersListMask[i]==true && playersList[i].pid!=sig){
+			// Tell all the clients that they have lost
+			kill(playersList[i].pid, SIG_STOP);
+		}
+	}
+	gameIsOn=false;
+	/// Resert alarm
+	alarm(0);
+
 }
 
 
@@ -396,6 +439,13 @@ void getCommand(){
 		else if(!strncmp(command, "start\n", 6) && command[6] != '\n')
 		{
 			initGame();
+			VERBOSE("Game started!");
+		}
+		/// START COMMAND
+		else if(gameIsOn && !strncmp(command, "stop\n", 5) && command[5] != '\n')
+		{
+			endGame(0);
+			VERBOSE("Game stopped!");
 		}
 		/// UNKNOWN COMMAND
 		else
@@ -406,20 +456,6 @@ void getCommand(){
 }
 
 
-void endGame(int sig){
-	VERBOSE("\nTime is out!");
-	int i;
-	for(i=0; i<MAX_PLAYERS; i++)
-	{
-		if(playersListMask[i]==true && playersList[i].pid!=sig){
-			// Tell all the clients that they have lost
-			kill(playersList[i].pid, SIG_STOP);
-		}
-	}
-	/// Resert alarm
-	alarm(0);
-
-}
 
 
 
