@@ -20,7 +20,7 @@
 #define bool int
 
 ///DEBUGGING
-#define DEBUG_MODE 1
+#define DEBUG_MODE false
 
 ///DISPLAYING MACROS
 #define ERR(...) fprintf (stderr,"\x1B[31m"__VA_ARGS__);perror(" ");printf("\x1B[0m\n")
