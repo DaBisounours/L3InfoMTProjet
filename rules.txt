@@ -1,0 +1,8 @@
+
+.:: Rules ::.
+
+You are one of the many possible players trying to guess a number. The range can be predefined, but the timeout is set depending on the level of difficulty.
+Basically, everytime someone tries to guess the number, the number 'shifts'. Which means it gets +1 or -1 everytime someone fails. You have to find the number before everyone AND before the timeout!
+Good luck and good game!
+
+.:: :: :: ::.

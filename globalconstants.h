@@ -33,87 +33,13 @@
 #define BASE_GAME_RANGE 20
 #define BASE_TIMEOUT 20
 #define MAX_PLAYERS 3
-#define SIG_START SIGUSR2
-#define SIG_STOP SIGUSR1
-
-///COMMUNICATION RELATED CONSTANTS
-#define MAX_CLIENT_NAME_LENGTH 100
-#define MAX_NAMED_PIPE_NAME_LENGTH 50
-#define CONNECTION_NAMED_PIPE_NAME ".serverConnection.pipe"
-#define VIRTUAL_CLIENT_ARGUMENT "--!VC!"
-
-	///CLIENT MESSAGES
-#define GUESS 0
-#define QUIT 1
-#define REASON_USER_REQUEST 11
-#define REASON_INTERRUPTED 12
-	///SERVER MESSAGES
-#define ACCEPT 1
-#define KICK 2
-#define GAME 3
-#define GAME_NOT_ON 4
 #define WIN 31
-#define LOSE 32
 #define HIGHER 33
 #define LOWER 34
-#define REASON_ROOM_FULL 21
-#define REASON_SERVER_KICK 22
-#define REASON_SERVER_INTERRUPTION 23
+
 
 
 ///RETURN CODES AND MESSAGES
 #define OK 0
 
 #define INTERRUPTED 1
-
-#define ERR_NAMED_PIPE_CREATION_FAIL 30
-#define ERR_NAMED_PIPE_CREATION_FAIL_MSG "Error while creating the named communication named pipe"
-
-#define ERR_OPEN_FAIL 20
-#define ERR_OPEN_FAIL_MSG "Error while opening the named communication named pipe"
-
-#define ERR_FORK_FAIL 10
-#define ERR_FORK_FAIL_MSG "Error while creating child process"
-
-#define ERR_EXEC_FAIL 40
-#define ERR_EXEC_FAIL_MSG "Error while executing binary"
-
-//TYPES
-// Client information
-typedef struct struct_clientInfo
-{
-	/// PID of the client
-	pid_t pid;
-	// Name of the client
-	char name[MAX_CLIENT_NAME_LENGTH];
-	// Name of the named tube
-	char pipeName[MAX_NAMED_PIPE_NAME_LENGTH];
-
-} clientInfo;
-
-/// Message from the client
-typedef struct struct_clientMessage
-{
-	/// Type of message: Guess / Quit
-	int type;
-
-	/// Choice: 
-	/// 	Guess: number chosen
-	///		Quit: reason why the client leaves
-	int choice;
-}clientMessage;
-
-/// Message from the server
-typedef struct struct_serverMessage
-{
-	/// Type of message: Kick / Answer
-	int type;
-
-	/// Choice:
-	///		Kick: reason why the client is kicked
-	///		Answer: higher/lower/found!
-	int choice;
-
-	/// Time left in seconds
-	int timeLeft;
-}serverMessage;
